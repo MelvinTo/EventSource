@@ -7,6 +7,20 @@
 //
 
 import UIKit
+
+struct IntfStats: Decodable {
+  let name: String
+  let rx: Int
+  let tx: Int
+}
+
+struct LiveStatsData: Decodable {
+  let intfStats: [IntfStats]
+}
+struct LiveStatsEvent: Decodable {
+    let data: LiveStatsData
+}
+
 class ViewController: UIViewController {
 
     @IBOutlet fileprivate weak var status: UILabel!
@@ -19,7 +33,7 @@ class ViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        let serverURL = URL(string: "http://127.0.0.1:8080/sse")!
+        let serverURL = URL(string: "http://192.168.1.55:8834/v1/encipher/simple?command=get&item=liveStats&target=0.0.0.0&streaming=true")!
         eventSource = EventSource(url: serverURL, headers: ["Authorization": "Bearer basic-auth-token"])
 
         eventSource?.onOpen { [weak self] in
@@ -43,15 +57,27 @@ class ViewController: UIViewController {
             self?.updateLabels(id, event: event, data: data)
         }
 
-        eventSource?.addEventListener("user-connected") { [weak self] id, event, data in
+        eventSource?.addEventListener("liveStats") { [weak self] id, event, data in
             self?.updateLabels(id, event: event, data: data)
         }
     }
 
+  func parseData(data: String?) -> String {
+    let lse = try! JSONDecoder( ).decode(LiveStatsEvent.self, from: (data?.data(using: .utf8))!)
+    var output = ""
+    var intfStats = lse.data.intfStats
+    intfStats = intfStats.sorted(by: { $0.name < $1.name })
+    for intfStat in intfStats {
+      output += "\(intfStat.name) tx: \(intfStat.tx) rx: \(intfStat.rx)\n"
+    }
+    
+    return output;
+  }
+  
     func updateLabels(_ id: String?, event: String?, data: String?) {
         idLabel.text = id
         nameLabel.text = event
-        dataLabel.text = data
+      dataLabel.text = parseData(data:data)
     }
 
     override func viewDidAppear(_ animated: Bool) {
